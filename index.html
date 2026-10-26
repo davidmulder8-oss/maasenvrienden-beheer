@@ -25,7 +25,7 @@
   button:disabled { opacity:.5; cursor:not-allowed; }
   .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
   .tabs button.active { background:var(--dark); color:var(--bg); }
-  .row { display:grid; grid-template-columns:2fr 3fr 90px 90px auto; gap:8px; align-items:end; padding:10px 0; border-top:1px solid var(--line); }
+  .row { display:grid; grid-template-columns:2fr 3fr 80px 130px 80px auto; gap:8px; align-items:end; padding:10px 0; border-top:1px solid var(--line); }
   .row:first-of-type { border-top:0; }
   .row .chk { display:flex; flex-direction:column; gap:4px; font-size:.78rem; }
   .cat-head { display:grid; grid-template-columns:1fr 2fr auto; gap:8px; align-items:end; margin-bottom:6px; }
@@ -89,7 +89,7 @@
     </div>
 
     <section data-panel="menu">
-      <p class="hint">Pas namen, omschrijvingen en prijzen aan. "Donderdag" is de Pizzadag-prijs: die verschijnt alleen als hij lager is dan de normale prijs. Engels en Duits zijn optioneel; leeg = de Nederlandse tekst.</p>
+      <p class="hint">Pas namen, omschrijvingen en prijzen aan. Bij "Dagprijs" kies je een dag (bijv. donderdag voor Pizzadag of zaterdag voor Satédag) met de prijs op die dag. Die verschijnt alleen als hij lager is dan de normale prijs. Vink "Alleen die dag" aan als een gerecht alleen op die dag te bestellen is. Engels en Duits zijn optioneel; leeg = de Nederlandse tekst.</p>
       <div id="menuEditor"></div>
       <button type="button" id="addCatBtn">+ Categorie toevoegen</button>
     </section>
@@ -286,8 +286,32 @@
       del.addEventListener("click", function () { if (confirm('Categorie "' + cat.name.nl + '" met alle gerechten verwijderen?')) { S.menu.splice(ci, 1); markDirty("menu"); renderMenu(); } });
       card.appendChild(el("div", { class: "cat-head" }, [field("Categorie", textInput(cat.name, "nl")), field("Toelichting (bijv. Vanaf 17:00 uur)", textInput(cat.note, "nl")), del]));
       cat.items.forEach(function (item, ii) {
-        var chk = el("input", { type: "checkbox" }); chk.checked = !!item.thursdayOnly;
-        chk.addEventListener("change", function () { if (chk.checked) item.thursdayOnly = true; else delete item.thursdayOnly; markDirty("menu"); });
+        /* Dagprijs: dag kiezen uit de open dagen (uit Openingstijden) */
+        var curDay = item.onlyDay != null ? item.onlyDay : (item.dayDeal ? item.dayDeal.day : null);
+        var daySel = el("select");
+        daySel.appendChild(el("option", { value: "", text: "Geen" }));
+        ORDER.forEach(function (d) {
+          if (!S.hours[d] && d !== curDay) return;
+          var o = el("option", { value: String(d), text: DAYS[d] + (S.hours[d] ? "" : " (dicht)") });
+          if (d === curDay) o.selected = true;
+          daySel.appendChild(o);
+        });
+        var dayPrice = el("input", { type: "number", step: "0.05", min: "0", placeholder: "€" });
+        dayPrice.value = item.dayDeal ? item.dayDeal.price : "";
+        var chk = el("input", { type: "checkbox" }); chk.checked = item.onlyDay != null;
+        var updDay = function () {
+          var d = daySel.value === "" ? null : parseInt(daySel.value, 10);
+          var p = dayPrice.value === "" ? null : Math.round(parseFloat(dayPrice.value) * 100) / 100;
+          delete item.dayDeal; delete item.onlyDay;
+          if (d != null && chk.checked) item.onlyDay = d;
+          else if (d != null && p != null) item.dayDeal = { day: d, price: p };
+          dayPrice.disabled = d == null || chk.checked; chk.disabled = d == null;
+          markDirty("menu");
+        };
+        dayPrice.disabled = curDay == null || chk.checked; chk.disabled = curDay == null;
+        daySel.addEventListener("change", updDay); dayPrice.addEventListener("input", updDay); chk.addEventListener("change", updDay);
+        var dayBox = el("div", {}, [el("label", { text: "Dagprijs" }), daySel, dayPrice]);
+        dayBox.style.display = "grid"; dayBox.style.gap = "4px";
         var rm = el("button", { type: "button", class: "danger", text: "Verwijder", title: "Gerecht verwijderen" });
         rm.addEventListener("click", function () { if (confirm('"' + item.name.nl + '" verwijderen?')) { cat.items.splice(ii, 1); markDirty("menu"); renderMenu(); } });
         var tr = el("details", {}, [el("summary", { text: "Engels / Duits" }), el("div", { class: "tr" }, [
@@ -298,8 +322,8 @@
           field("Gerecht", textInput(item.name, "nl")),
           field("Omschrijving", textInput(item.description, "nl", true)),
           field("Prijs €", numInput(item, "price")),
-          field("Donderdag €", numInput(item, "thursdayPrice", true)),
-          el("div", { class: "chk" }, [el("label", {}, [chk, document.createTextNode(" Alleen do")]), rm]),
+          dayBox,
+          el("div", { class: "chk" }, [el("label", {}, [chk, document.createTextNode(" Alleen die dag")]), rm]),
           tr
         ]));
       });
