@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Beheer | Maas en Vrienden</title>
+<link rel="icon" type="image/png" href="favicon-32.png">
+<style>
+  :root { --dark:#263724; --bg:#FAF3E6; --soft:#F4E9D6; --line:rgba(38,55,36,.15); --wood:#7C4E28; --red:#A6432F; --green:#3E6B4A; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Arial,sans-serif; background:var(--bg); color:#241F18; font-size:15px; }
+  header { background:var(--dark); color:var(--bg); padding:12px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; position:sticky; top:0; z-index:10; }
+  header strong { font-size:1.05rem; margin-right:auto; }
+  header a, header button.link { color:var(--bg); background:none; border:0; font:inherit; cursor:pointer; text-decoration:underline; }
+  main { max-width:1000px; margin:0 auto; padding:20px 16px 120px; }
+  h2 { margin:28px 0 10px; font-size:1.2rem; color:var(--dark); }
+  .card { background:#fff; border-radius:12px; padding:16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+  label { display:block; font-size:.8rem; font-weight:600; color:#52473A; margin-bottom:3px; }
+  input[type=text], input[type=password], input[type=number], input[type=time], textarea, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff; }
+  textarea { resize:vertical; min-height:38px; }
+  button { font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--dark); background:#fff; color:var(--dark); padding:7px 12px; }
+  button.primary { background:var(--dark); color:var(--bg); }
+  button.danger { border-color:var(--red); color:var(--red); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .tabs button.active { background:var(--dark); color:var(--bg); }
+  .row { display:grid; grid-template-columns:2fr 3fr 90px 90px auto; gap:8px; align-items:end; padding:10px 0; border-top:1px solid var(--line); }
+  .row:first-of-type { border-top:0; }
+  .row .chk { display:flex; flex-direction:column; gap:4px; font-size:.78rem; }
+  .cat-head { display:grid; grid-template-columns:1fr 2fr auto; gap:8px; align-items:end; margin-bottom:6px; }
+  details { grid-column:1 / -1; font-size:.85rem; }
+  details .tr { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
+  .day { display:grid; grid-template-columns:110px 90px 1fr 1fr; gap:10px; align-items:center; padding:8px 0; border-top:1px solid var(--line); }
+  .day:first-child { border-top:0; }
+  .text-item { padding:10px 0; border-top:1px solid var(--line); }
+  .text-item code { font-size:.75rem; color:#888; }
+  .changed { outline:2px solid #C99A66; outline-offset:1px; }
+  .savebar { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); padding:12px 16px; display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; z-index:10; }
+  .msg { font-size:.9rem; }
+  .msg.ok { color:var(--green); } .msg.err { color:var(--red); }
+  .login { max-width:360px; margin:70px auto; }
+  .login h1 { font-size:1.3rem; color:var(--dark); text-align:center; }
+  .login img { display:block; margin:0 auto 10px; width:80px; height:80px; border-radius:50%; }
+  .stack > * + * { margin-top:10px; }
+  .hint { font-size:.82rem; color:#6b5f50; }
+  [hidden] { display:none !important; }
+  @media (max-width:700px) { .row, .cat-head { grid-template-columns:1fr 1fr; } .day { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- Inloggen -->
+<section id="loginView" class="login card stack">
+  <img src="logo.webp" alt="">
+  <h1>Beheer Maas en Vrienden</h1>
+  <form id="loginForm" class="stack">
+    <div><label for="user">Gebruikersnaam</label><input type="text" id="user" autocomplete="username" required></div>
+    <div><label for="pass">Wachtwoord</label><input type="password" id="pass" autocomplete="current-password" required></div>
+    <button class="primary" type="submit" style="width:100%">Inloggen</button>
+    <p class="msg err" id="loginMsg"></p>
+  </form>
+</section>
+
+<!-- Eenmalig: GitHub-sleutel koppelen -->
+<section id="tokenView" class="login card stack" hidden>
+  <h1>Eenmalig koppelen</h1>
+  <p class="hint">Om wijzigingen op de website te zetten heeft deze pagina eenmalig een GitHub-sleutel nodig (een "fine-grained token" met schrijfrecht op alleen de repositories maasenvrienden en maasenvrienden-beheer). De sleutel wordt versleuteld met het wachtwoord opgeslagen.</p>
+  <form id="tokenForm" class="stack">
+    <div><label for="token">GitHub-sleutel</label><input type="password" id="token" autocomplete="off" required></div>
+    <button class="primary" type="submit" style="width:100%">Koppelen</button>
+    <p class="msg" id="tokenMsg"></p>
+  </form>
+</section>
+
+<!-- Editor -->
+<div id="appView" hidden>
+  <header>
+    <strong>Beheer Maas en Vrienden</strong>
+    <a href="https://maasenvrienden.nl/" target="_blank" rel="noopener">Bekijk website</a>
+    <button class="link" id="logoutBtn" type="button">Uitloggen</button>
+  </header>
+  <main>
+    <div class="tabs" id="tabs">
+      <button type="button" data-tab="menu" class="active">Menukaart</button>
+      <button type="button" data-tab="hours">Openingstijden</button>
+      <button type="button" data-tab="texts">Teksten</button>
+      <button type="button" data-tab="settings">Instellingen</button>
+    </div>
+
+    <section data-panel="menu">
+      <p class="hint">Pas namen, omschrijvingen en prijzen aan. "Donderdag" is de Pizzadag-prijs: die verschijnt alleen als hij lager is dan de normale prijs. Engels en Duits zijn optioneel; leeg = de Nederlandse tekst.</p>
+      <div id="menuEditor"></div>
+      <button type="button" id="addCatBtn">+ Categorie toevoegen</button>
+    </section>
+
+    <section data-panel="hours" hidden>
+      <p class="hint">Een sluitingstijd van 00:00 betekent middernacht.</p>
+      <div class="card" id="hoursEditor"></div>
+    </section>
+
+    <section data-panel="texts" hidden>
+      <p class="hint">Alle teksten van de website. Kies een taal en zoek op een woord.</p>
+      <div class="card" style="display:grid; grid-template-columns:140px 1fr; gap:10px;">
+        <select id="textLang"><option value="nl">Nederlands</option><option value="en">Engels</option><option value="de">Duits</option></select>
+        <input type="text" id="textSearch" placeholder="Zoek in teksten, bijv. terras">
+      </div>
+      <div class="card" id="textsEditor"></div>
+    </section>
+
+    <section data-panel="settings" hidden>
+      <div class="card stack">
+        <h2 style="margin-top:0">Wachtwoord wijzigen</h2>
+        <div><label for="newPass">Nieuw wachtwoord (minstens 8 tekens)</label><input type="password" id="newPass" autocomplete="new-password"></div>
+        <div><label for="newPass2">Herhaal nieuw wachtwoord</label><input type="password" id="newPass2" autocomplete="new-password"></div>
+        <button type="button" class="primary" id="changePassBtn">Wachtwoord opslaan</button>
+        <p class="msg" id="passMsg"></p>
+      </div>
+      <div class="card stack">
+        <h2 style="margin-top:0">GitHub-sleutel vervangen</h2>
+        <p class="hint">Alleen nodig als de sleutel verlopen is.</p>
+        <button type="button" id="resetTokenBtn">Nieuwe sleutel invoeren</button>
+      </div>
+    </section>
+  </main>
+  <div class="savebar">
+    <span class="msg" id="saveMsg">Nog geen wijzigingen.</span>
+    <button type="button" class="primary" id="saveBtn" disabled>Opslaan en publiceren</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var OWNER = "davidmulder8-oss", BRANCH = "main";
+  var SITE_REPO = "maasenvrienden", ADMIN_REPO = "maasenvrienden-beheer";
+  var PATHS = { menu: "js/menu-data.js", hours: "js/hours.js", i18n: "js/i18n.js", config: "config.json" };
+  function repoFor(path) { return path === PATHS.config ? ADMIN_REPO : SITE_REPO; }
+  var DAYS = ["Zondag", "Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag"];
+  var ORDER = [1, 2, 3, 4, 5, 6, 0];
+  var enc = new TextEncoder(), dec = new TextDecoder();
+
+  var S = { key: null, token: null, config: null, configSha: null, files: {}, menu: null, hours: null, texts: { nl: {}, en: {}, de: {} }, origTexts: null, dirty: {} };
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- Helpers: base64, crypto ---------- */
+  function bytesToB64(b) { var s = ""; for (var i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
+  function b64ToBytes(s) { var bin = atob(s.replace(/\s/g, "")); var b = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b; }
+  function utf8ToB64(s) { return bytesToB64(enc.encode(s)); }
+  function b64ToUtf8(s) { return dec.decode(b64ToBytes(s)); }
+
+  function deriveKey(password, saltB64, iter) {
+    return crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]).then(function (base) {
+      return crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64ToBytes(saltB64), iterations: iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    });
+  }
+  function encryptStr(key, text) {
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    return crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, enc.encode(text)).then(function (ct) {
+      return { iv: bytesToB64(iv), ct: bytesToB64(new Uint8Array(ct)) };
+    });
+  }
+  function decryptStr(key, box) {
+    return crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBytes(box.iv) }, key, b64ToBytes(box.ct)).then(function (pt) { return dec.decode(pt); });
+  }
+
+  /* ---------- GitHub API ---------- */
+  function gh(path, opts) {
+    opts = opts || {};
+    var headers = { Accept: "application/vnd.github+json" };
+    if (S.token) headers.Authorization = "Bearer " + S.token;
+    if (opts.body) headers["Content-Type"] = "application/json";
+    return fetch("https://api.github.com" + path, { method: opts.method || "GET", headers: headers, body: opts.body, cache: "no-store" }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) { var e = new Error(j.message || ("GitHub-fout " + r.status)); e.status = r.status; throw e; } return j; });
+    });
+  }
+  function getFile(path) {
+    return gh("/repos/" + OWNER + "/" + repoFor(path) + "/contents/" + path + "?ref=" + BRANCH).then(function (j) { return { text: b64ToUtf8(j.content), sha: j.sha }; });
+  }
+  function putFile(path, text, sha, message) {
+    return gh("/repos/" + OWNER + "/" + repoFor(path) + "/contents/" + path, { method: "PUT", body: JSON.stringify({ message: message, content: utf8ToB64(text), sha: sha, branch: BRANCH }) })
+      .then(function (j) { return j.content.sha; });
+  }
+
+  /* ---------- Inloggen ---------- */
+  $("loginForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msg = $("loginMsg"); msg.textContent = "Bezig…";
+    fetch("config.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (cfg) {
+      S.config = cfg;
+      if ($("user").value.trim() !== cfg.user) throw new Error("bad");
+      return deriveKey($("pass").value, cfg.salt, cfg.iterations).then(function (key) {
+        return decryptStr(key, cfg.verifier).then(function (v) { if (v !== "maasenvrienden-ok") throw new Error("bad"); S.key = key; });
+      });
+    }).then(function () {
+      $("pass").value = "";
+      msg.textContent = "";
+      if (S.config.token) {
+        return decryptStr(S.key, S.config.token).then(function (t) { S.token = t; return startApp(); });
+      }
+      showView("tokenView");
+    }).catch(function () { msg.textContent = "Onjuiste gebruikersnaam of wachtwoord."; });
+  });
+
+  function showView(id) { ["loginView", "tokenView", "appView"].forEach(function (v) { $(v).hidden = v !== id; }); }
+
+  /* ---------- GitHub-sleutel koppelen ---------- */
+  $("tokenForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msg = $("tokenMsg"); msg.className = "msg"; msg.textContent = "Sleutel controleren…";
+    S.token = $("token").value.trim();
+    Promise.all([gh("/repos/" + OWNER + "/" + SITE_REPO), gh("/repos/" + OWNER + "/" + ADMIN_REPO)]).then(function (repos) {
+      if (!repos.every(function (r) { return r.permissions && r.permissions.push; })) throw new Error("Deze sleutel heeft geen schrijfrecht op beide repositories.");
+      return getFile(PATHS.config);
+    }).then(function (f) {
+      return encryptStr(S.key, S.token).then(function (box) {
+        S.config.token = box;
+        return putFile(PATHS.config, JSON.stringify(S.config, null, 2) + "\n", f.sha, "Beheer: GitHub-sleutel gekoppeld");
+      });
+    }).then(function () { $("token").value = ""; return startApp(); })
+      .catch(function (err) { S.token = null; msg.className = "msg err"; msg.textContent = err.status === 401 ? "Deze sleutel werkt niet." : err.message; });
+  });
+
+  $("resetTokenBtn").addEventListener("click", function () { showView("tokenView"); });
+  $("logoutBtn").addEventListener("click", function () { location.reload(); });
+
+  /* ---------- Data laden ---------- */
+  function startApp() {
+    showView("appView");
+    setSaveMsg("Gegevens laden…");
+    return Promise.all([getFile(PATHS.menu), getFile(PATHS.hours), getFile(PATHS.i18n)]).then(function (res) {
+      S.files.menu = res[0]; S.files.hours = res[1]; S.files.i18n = res[2];
+      var w = {}; new Function("window", S.files.menu.text)(w); S.menu = w.MENU_DATA;
+      var m = S.files.hours.text.match(/var OPENING_HOURS = (\{[\s\S]*?\n  \});/);
+      S.hours = new Function("return " + m[1])();
+      ["nl", "en", "de"].forEach(function (lang) {
+        var sec = langSection(S.files.i18n.text, lang), re = /"([\w.]+)": "((?:[^"\\]|\\.)*)"/g, mm;
+        while ((mm = re.exec(sec.text))) S.texts[lang][mm[1]] = JSON.parse('"' + mm[2] + '"');
+      });
+      S.origTexts = JSON.parse(JSON.stringify(S.texts));
+      S.dirty = {};
+      renderMenu(); renderHours(); renderTexts();
+      setSaveMsg("Nog geen wijzigingen.");
+    }).catch(function (err) { setSaveMsg("Laden mislukt: " + err.message, "err"); });
+  }
+
+  function langSection(text, lang) {
+    var marks = { nl: "    nl: {", en: "    en: {", de: "    de: {" };
+    var start = text.indexOf(marks[lang]);
+    var end = lang === "nl" ? text.indexOf(marks.en) : lang === "en" ? text.indexOf(marks.de) : text.indexOf("\n  };", start);
+    return { start: start, end: end, text: text.slice(start, end) };
+  }
+
+  /* ---------- Menukaart ---------- */
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (k === "text") e.textContent = attrs[k]; else e.setAttribute(k, attrs[k]); });
+    (children || []).forEach(function (c) { e.appendChild(c); });
+    return e;
+  }
+  function field(labelText, input) { var d = el("div"); d.appendChild(el("label", { text: labelText })); d.appendChild(input); return d; }
+  function textInput(obj, key, area) {
+    var i = el(area ? "textarea" : "input", area ? { rows: "1" } : { type: "text" });
+    i.value = obj[key] || "";
+    i.addEventListener("input", function () { obj[key] = i.value; markDirty("menu"); });
+    return i;
+  }
+  function numInput(obj, key, optional) {
+    var i = el("input", { type: "number", step: "0.05", min: "0" });
+    i.value = obj[key] != null ? obj[key] : "";
+    i.addEventListener("input", function () {
+      var v = i.value === "" ? null : Math.round(parseFloat(i.value.replace(",", ".")) * 100) / 100;
+      if (v == null && optional) delete obj[key]; else obj[key] = v;
+      markDirty("menu");
+    });
+    return i;
+  }
+  function emptyLang() { return { nl: "", en: "", de: "" }; }
+
+  function renderMenu() {
+    var root = $("menuEditor"); root.innerHTML = "";
+    S.menu.forEach(function (cat, ci) {
+      var card = el("div", { class: "card" });
+      var del = el("button", { type: "button", class: "danger", text: "Categorie verwijderen" });
+      del.addEventListener("click", function () { if (confirm('Categorie "' + cat.name.nl + '" met alle gerechten verwijderen?')) { S.menu.splice(ci, 1); markDirty("menu"); renderMenu(); } });
+      card.appendChild(el("div", { class: "cat-head" }, [field("Categorie", textInput(cat.name, "nl")), field("Toelichting (bijv. Vanaf 17:00 uur)", textInput(cat.note, "nl")), del]));
+      cat.items.forEach(function (item, ii) {
+        var chk = el("input", { type: "checkbox" }); chk.checked = !!item.thursdayOnly;
+        chk.addEventListener("change", function () { if (chk.checked) item.thursdayOnly = true; else delete item.thursdayOnly; markDirty("menu"); });
+        var rm = el("button", { type: "button", class: "danger", text: "Verwijder", title: "Gerecht verwijderen" });
+        rm.addEventListener("click", function () { if (confirm('"' + item.name.nl + '" verwijderen?')) { cat.items.splice(ii, 1); markDirty("menu"); renderMenu(); } });
+        var tr = el("details", {}, [el("summary", { text: "Engels / Duits" }), el("div", { class: "tr" }, [
+          field("Naam (EN)", textInput(item.name, "en")), field("Naam (DE)", textInput(item.name, "de")),
+          field("Omschrijving (EN)", textInput(item.description, "en", true)), field("Omschrijving (DE)", textInput(item.description, "de", true))
+        ])]);
+        card.appendChild(el("div", { class: "row" }, [
+          field("Gerecht", textInput(item.name, "nl")),
+          field("Omschrijving", textInput(item.description, "nl", true)),
+          field("Prijs €", numInput(item, "price")),
+          field("Donderdag €", numInput(item, "thursdayPrice", true)),
+          el("div", { class: "chk" }, [el("label", {}, [chk, document.createTextNode(" Alleen do")]), rm]),
+          tr
+        ]));
+      });
+      var add = el("button", { type: "button", text: "+ Gerecht toevoegen" });
+      add.addEventListener("click", function () {
+        cat.items.push({ name: emptyLang(), description: emptyLang(), price: 0, diet: { vegan: false, vegetarian: false, glutenfree: false, lactosefree: false } });
+        markDirty("menu"); renderMenu();
+      });
+      card.appendChild(add);
+      root.appendChild(card);
+    });
+  }
+  $("addCatBtn").addEventListener("click", function () {
+    S.menu.push({ id: "categorie-" + Date.now(), name: emptyLang(), note: emptyLang(), items: [] });
+    markDirty("menu"); renderMenu();
+  });
+
+  /* ---------- Openingstijden ---------- */
+  function renderHours() {
+    var root = $("hoursEditor"); root.innerHTML = "";
+    ORDER.forEach(function (d) {
+      var h = S.hours[d];
+      var open = el("input", { type: "checkbox" }); open.checked = !!h;
+      var from = el("input", { type: "time" }), to = el("input", { type: "time" });
+      from.value = h ? h.open : "16:00"; to.value = h ? h.close : "22:00";
+      function upd() {
+        S.hours[d] = open.checked ? { open: from.value, close: to.value } : null;
+        from.disabled = to.disabled = !open.checked; markDirty("hours");
+      }
+      from.disabled = to.disabled = !h;
+      open.addEventListener("change", upd); from.addEventListener("input", upd); to.addEventListener("input", upd);
+      root.appendChild(el("div", { class: "day" }, [el("strong", { text: DAYS[d] }), el("label", {}, [open, document.createTextNode(" Open")]), field("Van", from), field("Tot", to)]));
+    });
+  }
+
+  /* ---------- Teksten ---------- */
+  function renderTexts() {
+    var root = $("textsEditor"), lang = $("textLang").value, q = $("textSearch").value.trim().toLowerCase();
+    root.innerHTML = "";
+    var keys = Object.keys(S.texts[lang]).filter(function (k) { return !q || k.toLowerCase().indexOf(q) !== -1 || S.texts[lang][k].toLowerCase().indexOf(q) !== -1; });
+    keys.slice(0, 150).forEach(function (k) {
+      var ta = el("textarea", { rows: S.texts[lang][k].length > 90 ? "3" : "1" }); ta.value = S.texts[lang][k];
+      if (ta.value !== S.origTexts[lang][k]) ta.classList.add("changed");
+      ta.addEventListener("input", function () { S.texts[lang][k] = ta.value; ta.classList.toggle("changed", ta.value !== S.origTexts[lang][k]); markDirty("i18n"); });
+      root.appendChild(el("div", { class: "text-item" }, [el("code", { text: k }), ta]));
+    });
+    if (keys.length > 150) root.appendChild(el("p", { class: "hint", text: "Nog " + (keys.length - 150) + " teksten. Zoek specifieker om ze te zien." }));
+    if (!keys.length) root.appendChild(el("p", { class: "hint", text: "Geen teksten gevonden." }));
+  }
+  $("textLang").addEventListener("change", renderTexts);
+  $("textSearch").addEventListener("input", renderTexts);
+
+  /* ---------- Tabs ---------- */
+  $("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-tab]"); if (!b) return;
+    document.querySelectorAll("#tabs button").forEach(function (x) { x.classList.toggle("active", x === b); });
+    document.querySelectorAll("[data-panel]").forEach(function (p) { p.hidden = p.getAttribute("data-panel") !== b.getAttribute("data-tab"); });
+  });
+
+  /* ---------- Opslaan ---------- */
+  function markDirty(what) { S.dirty[what] = true; $("saveBtn").disabled = false; setSaveMsg("Niet-opgeslagen wijzigingen."); }
+  function setSaveMsg(t, kind) { var m = $("saveMsg"); m.textContent = t; m.className = "msg" + (kind ? " " + kind : ""); }
+  window.addEventListener("beforeunload", function (e) { if (Object.keys(S.dirty).length) { e.preventDefault(); e.returnValue = ""; } });
+
+  function buildMenu() {
+    var src = S.files.menu.text, i = src.indexOf("window.MENU_DATA");
+    return src.slice(0, i) + "window.MENU_DATA = " + JSON.stringify(S.menu, null, 2) + ";\n";
+  }
+  function buildHours() {
+    var names = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+    var lines = [0, 1, 2, 3, 4, 5, 6].map(function (d, idx) {
+      var h = S.hours[d], val = h ? '{ open: "' + h.open + '", close: "' + h.close + '" }' : "null";
+      return "    " + d + ": " + val + (idx < 6 ? "," : "") + " // " + names[d] + (h ? "" : " - gesloten");
+    });
+    return S.files.hours.text.replace(/var OPENING_HOURS = \{[\s\S]*?\n  \};/, "var OPENING_HOURS = {\n" + lines.join("\n") + "\n  };");
+  }
+  function buildI18n() {
+    var text = S.files.i18n.text;
+    ["de", "en", "nl"].forEach(function (lang) {
+      var sec = langSection(text, lang), part = sec.text;
+      Object.keys(S.texts[lang]).forEach(function (k) {
+        if (S.texts[lang][k] === S.origTexts[lang][k]) return;
+        var re = new RegExp('("' + k.replace(/\./g, "\\.") + '": )"(?:[^"\\\\]|\\\\.)*"');
+        part = part.replace(re, function (_, p1) { return p1 + JSON.stringify(S.texts[lang][k]); });
+      });
+      text = text.slice(0, sec.start) + part + text.slice(sec.end);
+    });
+    return text;
+  }
+
+  $("saveBtn").addEventListener("click", function () {
+    var btn = $("saveBtn"); btn.disabled = true; setSaveMsg("Opslaan…");
+    var jobs = [];
+    if (S.dirty.menu) jobs.push(["menu", buildMenu(), "Beheer: menukaart bijgewerkt"]);
+    if (S.dirty.hours) jobs.push(["hours", buildHours(), "Beheer: openingstijden bijgewerkt"]);
+    if (S.dirty.i18n) jobs.push(["i18n", buildI18n(), "Beheer: teksten bijgewerkt"]);
+    jobs.reduce(function (p, job) {
+      return p.then(function () {
+        return putFile(PATHS[job[0]], job[1], S.files[job[0]].sha, job[2]).then(function (sha) { S.files[job[0]] = { text: job[1], sha: sha }; });
+      });
+    }, Promise.resolve()).then(function () {
+      S.dirty = {}; S.origTexts = JSON.parse(JSON.stringify(S.texts)); renderTexts();
+      setSaveMsg("Opgeslagen! Binnen 1 à 2 minuten staat het op de website.", "ok");
+    }).catch(function (err) {
+      btn.disabled = false;
+      setSaveMsg(err.status === 409 ? "Iemand anders heeft net iets gewijzigd. Ververs de pagina en probeer opnieuw." : "Opslaan mislukt: " + err.message, "err");
+    });
+  });
+
+  /* ---------- Wachtwoord wijzigen ---------- */
+  $("changePassBtn").addEventListener("click", function () {
+    var p1 = $("newPass").value, p2 = $("newPass2").value, msg = $("passMsg");
+    msg.className = "msg err";
+    if (p1.length < 8) { msg.textContent = "Kies minstens 8 tekens."; return; }
+    if (p1 !== p2) { msg.textContent = "De wachtwoorden zijn niet gelijk."; return; }
+    msg.className = "msg"; msg.textContent = "Opslaan…";
+    var salt = bytesToB64(crypto.getRandomValues(new Uint8Array(16)));
+    var cfg = { user: S.config.user, iterations: S.config.iterations, salt: salt };
+    var newKey;
+    deriveKey(p1, salt, cfg.iterations).then(function (k) {
+      newKey = k;
+      return Promise.all([encryptStr(k, "maasenvrienden-ok"), encryptStr(k, S.token)]);
+    }).then(function (boxes) {
+      cfg.verifier = boxes[0]; cfg.token = boxes[1];
+      return getFile(PATHS.config);
+    }).then(function (f) {
+      return putFile(PATHS.config, JSON.stringify(cfg, null, 2) + "\n", f.sha, "Beheer: wachtwoord gewijzigd");
+    }).then(function () {
+      S.config = cfg; S.key = newKey; $("newPass").value = $("newPass2").value = "";
+      msg.className = "msg ok"; msg.textContent = "Wachtwoord gewijzigd. Over 1 à 2 minuten geldt het nieuwe wachtwoord.";
+    }).catch(function (err) { msg.className = "msg err"; msg.textContent = "Mislukt: " + err.message; });
+  });
+})();
+</script>
+</body>
+</html>

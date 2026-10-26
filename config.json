@@ -1,0 +1,10 @@
+{
+  "user": "Rob",
+  "iterations": 310000,
+  "salt": "R9jfUdKljw8KEKKb61MpXQ==",
+  "verifier": {
+    "iv": "RhKVcG2Qifc3OkCC",
+    "ct": "QCatZlcB3rbKkV5apTKuBdtZMTzBrM78gkzRdDuydWFW"
+  },
+  "token": null
+}
