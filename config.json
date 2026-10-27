@@ -6,5 +6,8 @@
     "iv": "RhKVcG2Qifc3OkCC",
     "ct": "QCatZlcB3rbKkV5apTKuBdtZMTzBrM78gkzRdDuydWFW"
   },
-  "token": null
+  "token": {
+    "iv": "msVcf1bAGL134PRO",
+    "ct": "kxHhPDoaV4E+XrdOPifMd7hx0vCXABKG2mmouVTvJqNYXugElBZ+6xwpQYBevJkQF69CJaMa++loLQIMcCKFQjBPEdjLKXfWnxJ+UleBvbK4AWGxrdMQk/jNJp6qadYZfy+GAluV1t3qHyypiA=="
+  }
 }
