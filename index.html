@@ -83,6 +83,7 @@
   <main>
     <div class="tabs" id="tabs">
       <button type="button" data-tab="menu" class="active">Menukaart</button>
+      <button type="button" data-tab="events">Evenementen</button>
       <button type="button" data-tab="hours">Openingstijden</button>
       <button type="button" data-tab="texts">Teksten</button>
       <button type="button" data-tab="settings">Instellingen</button>
@@ -92,6 +93,15 @@
       <p class="hint">Pas namen, omschrijvingen en prijzen aan. Bij "Dagprijs" kies je een dag (bijv. donderdag voor Pizzadag of zaterdag voor Satédag) met de prijs op die dag. Die verschijnt alleen als hij lager is dan de normale prijs. Vink "Alleen die dag" aan als een gerecht alleen op die dag te bestellen is. Engels en Duits zijn optioneel; leeg = de Nederlandse tekst.</p>
       <div id="menuEditor"></div>
       <button type="button" id="addCatBtn">+ Categorie toevoegen</button>
+    </section>
+
+    <section data-panel="events" hidden>
+      <p class="hint">Voeg evenementen toe met datum, tijd, omschrijving en een afbeelding. Vink "Pop-up op de homepage" aan om het evenement bij binnenkomst te tonen. Na de (eind)datum verdwijnt een evenement vanzelf van de website; met de rode knop haal je oude evenementen ook hier weg.</p>
+      <div id="eventsEditor"></div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" id="addEventBtn">+ Evenement toevoegen</button>
+        <button type="button" class="danger" id="delPastBtn">Voorbije evenementen verwijderen</button>
+      </div>
     </section>
 
     <section data-panel="hours" hidden>
@@ -135,7 +145,7 @@
 
   var OWNER = "davidmulder8-oss", BRANCH = "main";
   var SITE_REPO = "maasenvrienden", ADMIN_REPO = "maasenvrienden-beheer";
-  var PATHS = { menu: "js/menu-data.js", hours: "js/hours.js", i18n: "js/i18n.js", config: "config.json" };
+  var PATHS = { events: "js/events-data.js", menu: "js/menu-data.js", hours: "js/hours.js", i18n: "js/i18n.js", config: "config.json" };
   function repoFor(path) { return path === PATHS.config ? ADMIN_REPO : SITE_REPO; }
   var DAYS = ["Zondag", "Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag"];
   var ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -229,8 +239,9 @@
   function startApp() {
     showView("appView");
     setSaveMsg("Gegevens laden…");
-    return Promise.all([getFile(PATHS.menu), getFile(PATHS.hours), getFile(PATHS.i18n)]).then(function (res) {
-      S.files.menu = res[0]; S.files.hours = res[1]; S.files.i18n = res[2];
+    return Promise.all([getFile(PATHS.menu), getFile(PATHS.hours), getFile(PATHS.i18n), getFile(PATHS.events)]).then(function (res) {
+      S.files.menu = res[0]; S.files.hours = res[1]; S.files.i18n = res[2]; S.files.events = res[3];
+      var we = {}; new Function("window", S.files.events.text)(we); S.events = we.EVENTS_DATA || [];
       var w = {}; new Function("window", S.files.menu.text)(w); S.menu = w.MENU_DATA;
       var m = S.files.hours.text.match(/var OPENING_HOURS = (\{[\s\S]*?\n  \});/);
       S.hours = new Function("return " + m[1])();
@@ -240,7 +251,7 @@
       });
       S.origTexts = JSON.parse(JSON.stringify(S.texts));
       S.dirty = {};
-      renderMenu(); renderHours(); renderTexts();
+      renderMenu(); renderEvents(); renderHours(); renderTexts();
       setSaveMsg("Nog geen wijzigingen.");
     }).catch(function (err) { setSaveMsg("Laden mislukt: " + err.message, "err"); });
   }
@@ -260,10 +271,10 @@
     return e;
   }
   function field(labelText, input) { var d = el("div"); d.appendChild(el("label", { text: labelText })); d.appendChild(input); return d; }
-  function textInput(obj, key, area) {
+  function textInput(obj, key, area, section) {
     var i = el(area ? "textarea" : "input", area ? { rows: "1" } : { type: "text" });
     i.value = obj[key] || "";
-    i.addEventListener("input", function () { obj[key] = i.value; markDirty("menu"); });
+    i.addEventListener("input", function () { obj[key] = i.value; markDirty(section || "menu"); });
     return i;
   }
   function numInput(obj, key, optional) {
@@ -340,6 +351,104 @@
     S.menu.push({ id: "categorie-" + Date.now(), name: emptyLang(), note: emptyLang(), items: [] });
     markDirty("menu"); renderMenu();
   });
+
+  /* ---------- Evenementen ---------- */
+  function todayIso() { var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+  function isPast(ev) { return (ev.endDate || ev.date) < todayIso(); }
+  function normEvent(ev) {
+    ["title", "time", "category", "description"].forEach(function (k) {
+      ev[k] = ev[k] || {}; ["nl", "en", "de"].forEach(function (l) { if (ev[k][l] == null) ev[k][l] = ""; });
+    });
+    return ev;
+  }
+  function resizeImage(file) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var max = 1400, w = img.width, h = img.height, s = Math.min(1, max / Math.max(w, h));
+        var c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        var dataUrl = c.toDataURL("image/jpeg", 0.85);
+        resolve({ b64: dataUrl.split(",")[1], preview: dataUrl });
+      };
+      img.onerror = function () { reject(new Error("Dit bestand is geen afbeelding.")); };
+      img.src = url;
+    });
+  }
+  function renderEvents() {
+    var root = $("eventsEditor"); root.innerHTML = "";
+    S.events.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    if (!S.events.length) root.appendChild(el("p", { class: "hint", text: "Er staan nog geen evenementen. Klik op \"+ Evenement toevoegen\"." }));
+    S.events.forEach(function (ev, i) {
+      normEvent(ev);
+      var card = el("div", { class: "card" });
+      if (isPast(ev)) card.style.opacity = "0.6";
+      var date = el("input", { type: "date" }); date.value = ev.date || "";
+      date.addEventListener("change", function () { ev.date = date.value; markDirty("events"); });
+      var end = el("input", { type: "date" }); end.value = ev.endDate || "";
+      end.addEventListener("change", function () { if (end.value) ev.endDate = end.value; else delete ev.endDate; markDirty("events"); });
+      var pop = el("input", { type: "checkbox" }); pop.checked = !!ev.featured;
+      pop.addEventListener("change", function () { if (pop.checked) ev.featured = true; else delete ev.featured; markDirty("events"); });
+
+      var preview = el("img", { alt: "" }); preview.style.cssText = "max-width:160px; max-height:110px; border-radius:8px; display:block; margin-bottom:6px; object-fit:cover;";
+      if (ev._upload) preview.src = ev._upload.preview; else if (ev.image) preview.src = "https://maasenvrienden.nl/" + ev.image; else preview.hidden = true;
+      var file = el("input", { type: "file", accept: "image/*" });
+      var imgMsg = el("span", { class: "hint" });
+      file.addEventListener("change", function () {
+        if (!file.files[0]) return;
+        imgMsg.textContent = "Afbeelding verkleinen…";
+        resizeImage(file.files[0]).then(function (r) {
+          ev._upload = r; preview.src = r.preview; preview.hidden = false; imgMsg.textContent = "Wordt geüpload bij Opslaan."; markDirty("events");
+        }).catch(function (err) { imgMsg.textContent = err.message; });
+      });
+      var noImg = el("button", { type: "button", text: "Afbeelding weghalen" });
+      noImg.addEventListener("click", function () { delete ev.image; delete ev._upload; preview.hidden = true; markDirty("events"); });
+
+      var del = el("button", { type: "button", class: "danger", text: "Evenement verwijderen" });
+      del.addEventListener("click", function () { if (confirm("\"" + (ev.title.nl || "Dit evenement") + "\" verwijderen?")) { S.events.splice(i, 1); markDirty("events"); renderEvents(); } });
+
+      var g = function (cols, kids) { var d = el("div", {}, kids); d.style.cssText = "display:grid; gap:8px; margin-bottom:8px; grid-template-columns:" + cols; return d; };
+      card.appendChild(g("2fr 1fr 1fr", [field("Titel" + (isPast(ev) ? " (voorbij)" : ""), textInput(ev.title, "nl", false, "events")), field("Datum", date), field("Tot en met (optioneel)", end)]));
+      card.appendChild(g("1fr 1fr", [field("Tijd (bijv. Vanaf 17:30 uur)", textInput(ev.time, "nl", false, "events")), field("Soort (bijv. Thema-avond)", textInput(ev.category, "nl", false, "events"))]));
+      card.appendChild(g("1fr", [field("Omschrijving", textInput(ev.description, "nl", true, "events"))]));
+      card.appendChild(g("auto 1fr", [el("div", {}, [preview]), el("div", {}, [el("label", { text: "Afbeelding of poster" }), file, el("div", {}, [imgMsg]), noImg])]));
+      card.appendChild(el("details", {}, [el("summary", { text: "Engels / Duits" }), el("div", { class: "tr" }, [
+        field("Titel (EN)", textInput(ev.title, "en", false, "events")), field("Titel (DE)", textInput(ev.title, "de", false, "events")),
+        field("Tijd (EN)", textInput(ev.time, "en", false, "events")), field("Tijd (DE)", textInput(ev.time, "de", false, "events")),
+        field("Soort (EN)", textInput(ev.category, "en", false, "events")), field("Soort (DE)", textInput(ev.category, "de", false, "events")),
+        field("Omschrijving (EN)", textInput(ev.description, "en", true, "events")), field("Omschrijving (DE)", textInput(ev.description, "de", true, "events"))
+      ])]));
+      var popLabel = el("label", {}, [pop, document.createTextNode(" Pop-up op de homepage")]); popLabel.style.cssText = "font-size:.9rem; font-weight:600;";
+      card.appendChild(g("1fr auto", [popLabel, del]));
+      root.appendChild(card);
+    });
+  }
+  $("addEventBtn").addEventListener("click", function () {
+    S.events.push(normEvent({ title: emptyLang(), date: todayIso(), time: emptyLang(), category: { nl: "Evenement", en: "Event", de: "Veranstaltung" }, description: emptyLang() }));
+    markDirty("events"); renderEvents();
+  });
+  $("delPastBtn").addEventListener("click", function () {
+    var n = S.events.filter(isPast).length;
+    if (!n) { alert("Er zijn geen voorbije evenementen."); return; }
+    if (!confirm(n + " voorbij(e) evenement(en) verwijderen?")) return;
+    S.events = S.events.filter(function (ev) { return !isPast(ev); }); markDirty("events"); renderEvents();
+  });
+  function slug(s) { return (s || "evenement").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "evenement"; }
+  function uploadEventImages() {
+    return S.events.filter(function (ev) { return ev._upload; }).reduce(function (p, ev) {
+      return p.then(function () {
+        var path = "images/events/" + (ev.date || todayIso()) + "-" + slug(ev.title.nl) + "-" + Date.now() + ".jpg";
+        return gh("/repos/" + OWNER + "/" + SITE_REPO + "/contents/" + path, { method: "PUT", body: JSON.stringify({ message: "Beheer: afbeelding evenement", content: ev._upload.b64, branch: BRANCH }) })
+          .then(function () { ev.image = path; delete ev._upload; });
+      });
+    }, Promise.resolve());
+  }
+  function buildEvents() {
+    var src = S.files.events.text, i = src.indexOf("window.EVENTS_DATA");
+    var clean = JSON.stringify(S.events, function (k, v) { return k.charAt(0) === "_" ? undefined : v; }, 2);
+    return src.slice(0, i) + "window.EVENTS_DATA = " + clean + ";\n";
+  }
 
   /* ---------- Openingstijden ---------- */
   function renderHours() {
@@ -420,12 +529,13 @@
     if (S.dirty.menu) jobs.push(["menu", buildMenu(), "Beheer: menukaart bijgewerkt"]);
     if (S.dirty.hours) jobs.push(["hours", buildHours(), "Beheer: openingstijden bijgewerkt"]);
     if (S.dirty.i18n) jobs.push(["i18n", buildI18n(), "Beheer: teksten bijgewerkt"]);
-    jobs.reduce(function (p, job) {
+    var start = S.dirty.events ? uploadEventImages().then(function () { jobs.push(["events", buildEvents(), "Beheer: evenementen bijgewerkt"]); }) : Promise.resolve();
+    start.then(function () { return jobs.reduce(function (p, job) {
       return p.then(function () {
         return putFile(PATHS[job[0]], job[1], S.files[job[0]].sha, job[2]).then(function (sha) { S.files[job[0]] = { text: job[1], sha: sha }; });
       });
-    }, Promise.resolve()).then(function () {
-      S.dirty = {}; S.origTexts = JSON.parse(JSON.stringify(S.texts)); renderTexts();
+    }, Promise.resolve()); }).then(function () {
+      S.dirty = {}; if (S.events) renderEvents(); S.origTexts = JSON.parse(JSON.stringify(S.texts)); renderTexts();
       setSaveMsg("Opgeslagen! Binnen 1 à 2 minuten staat het op de website.", "ok");
     }).catch(function (err) {
       btn.disabled = false;
